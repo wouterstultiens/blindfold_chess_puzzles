@@ -1,2 +1,5 @@
 /screenshots/
 piece_positions.txt
+__pycache__
+project_contents.py
+output.txt
