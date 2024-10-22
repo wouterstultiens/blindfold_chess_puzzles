@@ -17,7 +17,7 @@ def detect_chessboard():
 
     # Activate the window and take a screenshot
     window.activate()
-    time.sleep(0.005)  # Slight delay to ensure the window is active
+    time.sleep(0.01)  # Slight delay to ensure the window is active
     screenshot = pyautogui.screenshot(region=(window.left, window.top, window.width, window.height))
     window.minimize()
 
