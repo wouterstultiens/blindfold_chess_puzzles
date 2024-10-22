@@ -1,2 +1,0 @@
-White: Pc6, Kc5, Pd5, Nf5, Ra1, Qc1
-Black: Qb8, Ne8, Pf8, Pf6, Bf4, Pe3, Pf2, Kg2
