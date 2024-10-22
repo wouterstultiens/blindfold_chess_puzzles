@@ -22,5 +22,5 @@ if __name__ == "__main__":
     detect_and_save_squares(image_path, squares_folder)
 
     print("Detecting pieces on the board...")
-    save_detected_positions()
+    save_detected_positions(method="SSIM", threshold=0.1)   
     print("Piece detection completed. Check 'piece_positions.txt' for results.")

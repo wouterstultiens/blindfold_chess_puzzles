@@ -42,20 +42,44 @@ def compare_images(imageA, imageB):
     score, _ = ssim(grayA, grayB, full=True)
     return score
 
+# Function to detect the predominant color (black or white) in an image, with a threshold
+def detect_color(image, threshold=0.5):
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    total_pixels = gray.size
+    black_pixels = np.sum(gray < 128)
+    white_pixels = np.sum(gray >= 128)
+    
+    # Calculate the percentage of black and white pixels
+    black_ratio = black_pixels / total_pixels
+    white_ratio = white_pixels / total_pixels
+    
+    # Determine if it's black or white based on the threshold
+    if black_ratio >= threshold:
+        return 'black'
+    elif white_ratio >= threshold:
+        return 'white'
+    else:
+        return 'uncertain'
+
+# Function to detect the shape similarity using SSIM
+def detect_shape(square_img):
+    best_score = -1
+    best_piece = 'empty'
+    for piece in pieces:
+        piece_img = cv2.imread(os.path.join(pieces_folder, piece + '.png'))
+        score = compare_images(square_img, piece_img)
+        if score > best_score:
+            best_score = score
+            best_piece = piece
+    return best_piece
+
 # Function to detect the board perspective
 def detect_perspective():
-    # Load the a1 and h8 template images
     a1_template = cv2.imread('pieces/notation_a1_square.png')
     h8_template = cv2.imread('pieces/notation_h8_square.png')
-
-    # Load the a1 square from the detected squares
     a1_square = cv2.imread(os.path.join(squares_folder, 'a1.png'))
-
-    # Compare a1 square with both templates
     similarity_a1 = compare_images(a1_square, a1_template)
     similarity_h8 = compare_images(a1_square, h8_template)
-
-    # Determine the perspective based on the higher similarity score
     if similarity_a1 > similarity_h8:
         print("Board is in white's perspective.")
         return 'white'
@@ -64,12 +88,9 @@ def detect_perspective():
         return 'black'
 
 # Function to detect pieces and apply correct board mapping
-def detect_pieces():
+def detect_pieces(method="SSIM", threshold=0.5):
     perspective = detect_perspective()
-
-    # Choose the appropriate board mapping
     board_positions = board_positions_white if perspective == 'white' else board_positions_black
-
     white_pieces = []
     black_pieces = []
 
@@ -77,52 +98,53 @@ def detect_pieces():
         if square_file.endswith('.png'):
             square_path = os.path.join(squares_folder, square_file)
             square_img = cv2.imread(square_path)
-            probabilities = []
 
-            # Compare the square image with each piece image
+            # Get the top 3 pieces based on SSIM
+            probabilities = []
             for piece in pieces:
                 piece_path = os.path.join(pieces_folder, piece + '.png')
                 piece_img = cv2.imread(piece_path)
                 similarity = compare_images(square_img, piece_img)
                 probabilities.append(similarity)
 
-            # Normalize probabilities
             probabilities = np.array(probabilities)
-            probabilities = probabilities / probabilities.sum()
-
-            # Get the most likely piece
-            top_piece_index = np.argmax(probabilities)
-            top_piece = pieces[top_piece_index]
-
-
-
-            # Get the top 3 pieces with the highest probabilities
             top_3_indices = np.argsort(probabilities)[-3:][::-1]
             top_3_pieces = [pieces[idx] for idx in top_3_indices]
             top_3_probabilities = probabilities[top_3_indices]
 
-            # Print or save the top 3 pieces with their probabilities
-            print(f"Square {board_positions[i]}: {list(zip(top_3_pieces, top_3_probabilities))}")
+            # Suggested color by color method with a threshold
+            suggested_color = detect_color(square_img, threshold=threshold)
 
+            # Suggested shape by shape method (either SSIM or custom shape method)
+            if method == "SSIM":
+                final_shape = top_3_pieces[0]  # Pick the top SSIM match
+            else:
+                final_shape = detect_shape(square_img)  # Use custom shape detection
 
-
-            # Store the results for later use
-            if top_piece != 'empty':
-                pos = board_positions[i]
-                if top_piece[0] == 'w':
-                    white_pieces.append(f"{top_piece[1]}{pos}")
+            # If the shape is empty, skip color
+            if final_shape != 'empty':
+                # Modify the color of the final shape based on the suggested color
+                if suggested_color == 'black':
+                    final_shape = 'b' + final_shape[1:]  # Change to black piece
+                elif suggested_color == 'white':
+                    final_shape = 'w' + final_shape[1:]  # Change to white piece
+                # Print final shape and suggested color
+                print(f"Square {board_positions[i]}: Final Shape: {final_shape}, Suggested color: {suggested_color}")
+                
+                if final_shape[0] == 'w':
+                    white_pieces.append(f"{final_shape[1]}{board_positions[i]}")
                 else:
-                    black_pieces.append(f"{top_piece[1]}{pos}")
+                    black_pieces.append(f"{final_shape[1]}{board_positions[i]}")
+            else:
+                print(f"Square {board_positions[i]}: Final Shape: empty")
 
     return white_pieces, black_pieces
 
-
 # Save the detected pieces in human-readable format
-def save_detected_positions():
-    white_pieces, black_pieces = detect_pieces()
+def save_detected_positions(method="SSIM", threshold=0.5):
+    white_pieces, black_pieces = detect_pieces(method=method, threshold=threshold)
     
     with open('piece_positions.txt', 'w') as f:
         f.write(f"White: {', '.join(white_pieces)}\n")
         f.write(f"Black: {', '.join(black_pieces)}\n")
     print(f"Positions saved in piece_positions.txt")
-
