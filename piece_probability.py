@@ -94,6 +94,18 @@ def detect_pieces():
             top_piece_index = np.argmax(probabilities)
             top_piece = pieces[top_piece_index]
 
+
+
+            # Get the top 3 pieces with the highest probabilities
+            top_3_indices = np.argsort(probabilities)[-3:][::-1]
+            top_3_pieces = [pieces[idx] for idx in top_3_indices]
+            top_3_probabilities = probabilities[top_3_indices]
+
+            # Print or save the top 3 pieces with their probabilities
+            print(f"Square {board_positions[i]}: {list(zip(top_3_pieces, top_3_probabilities))}")
+
+
+
             # Store the results for later use
             if top_piece != 'empty':
                 pos = board_positions[i]
