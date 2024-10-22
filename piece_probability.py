@@ -42,24 +42,35 @@ def compare_images(imageA, imageB):
     score, _ = ssim(grayA, grayB, full=True)
     return score
 
-# Function to detect the predominant color (black or white) in an image, with a threshold
-def detect_color(image, threshold=0.5):
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    total_pixels = gray.size
-    black_pixels = np.sum(gray < 128)
-    white_pixels = np.sum(gray >= 128)
+# Function to detect the predominant color (black or white) in an image with a single threshold
+def detect_color(image, threshold=1):
+    # Convert the image to RGB
+    rgb_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
     
-    # Calculate the percentage of black and white pixels
-    black_ratio = black_pixels / total_pixels
-    white_ratio = white_pixels / total_pixels
+    total_pixels = rgb_image.shape[0] * rgb_image.shape[1]  # Total number of pixels
+
+    # Define thresholds for what is considered "dark" (black) and "light" (white)
+    black_threshold = 50  # Very low values across all channels for black
+    white_threshold = 200  # Very high values across all channels for white
+
+    # Count black pixels: where all RGB values are below black_threshold
+    black_pixels = np.sum(np.all(rgb_image < black_threshold, axis=2))
     
-    # Determine if it's black or white based on the threshold
-    if black_ratio >= threshold:
-        return 'black'
-    elif white_ratio >= threshold:
-        return 'white'
+    # Count white pixels: where all RGB values are above white_threshold
+    white_pixels = np.sum(np.all(rgb_image > white_threshold, axis=2))
+    
+    # Calculate black and white values as numbers from 1 to 100
+    black_value = int((black_pixels / total_pixels) * 100)
+    white_value = int((white_pixels / total_pixels) * 100)
+    
+    # Divide white by black to determine threshold
+    threshold_value = white_value / black_value if black_value != 0 else float('inf')
+    
+    # Determine if it's predominantly white or black based on the threshold
+    if threshold_value > threshold:
+        return 'white', black_value, white_value, threshold_value
     else:
-        return 'uncertain'
+        return 'black', black_value, white_value, threshold_value
 
 # Function to detect the shape similarity using SSIM
 def detect_shape(square_img):
@@ -99,7 +110,7 @@ def detect_pieces(method="SSIM", threshold=0.5):
             square_path = os.path.join(squares_folder, square_file)
             square_img = cv2.imread(square_path)
 
-            # Get the top 3 pieces based on SSIM
+            # Get the top piece based on SSIM
             probabilities = []
             for piece in pieces:
                 piece_path = os.path.join(pieces_folder, piece + '.png')
@@ -108,43 +119,60 @@ def detect_pieces(method="SSIM", threshold=0.5):
                 probabilities.append(similarity)
 
             probabilities = np.array(probabilities)
-            top_3_indices = np.argsort(probabilities)[-3:][::-1]
-            top_3_pieces = [pieces[idx] for idx in top_3_indices]
-            top_3_probabilities = probabilities[top_3_indices]
+            top_piece_index = np.argmax(probabilities)  # Get the best SSIM match
+            top_piece = pieces[top_piece_index]  # Best matching piece
 
-            # Suggested color by color method with a threshold
-            suggested_color = detect_color(square_img, threshold=threshold)
+            # If the detected piece is empty, skip assigning any color
+            if top_piece == 'empty':
+                print(f"Square {board_positions[i]}: Final Piece: empty")
+                continue  # Skip to the next square
 
-            # Suggested shape by shape method (either SSIM or custom shape method)
-            if method == "SSIM":
-                final_shape = top_3_pieces[0]  # Pick the top SSIM match
+            # Detect the color using color method with a threshold
+            suggested_color, black_value, white_value, threshold_value = detect_color(square_img, threshold=threshold)
+
+            # Assign the final piece based on the color detected
+            if suggested_color == 'black':
+                final_piece = 'b' + top_piece[1:]  # Force black color
+            elif suggested_color == 'white':
+                final_piece = 'w' + top_piece[1:]  # Force white color
             else:
-                final_shape = detect_shape(square_img)  # Use custom shape detection
+                final_piece = 'empty'  # If neither color is detected
 
-            # If the shape is empty, skip color
-            if final_shape != 'empty':
-                # Modify the color of the final shape based on the suggested color
-                if suggested_color == 'black':
-                    final_shape = 'b' + final_shape[1:]  # Change to black piece
-                elif suggested_color == 'white':
-                    final_shape = 'w' + final_shape[1:]  # Change to white piece
-                # Print final shape and suggested color
-                print(f"Square {board_positions[i]}: Final Shape: {final_shape}, Suggested color: {suggested_color}")
-                
-                if final_shape[0] == 'w':
-                    white_pieces.append(f"{final_shape[1]}{board_positions[i]}")
-                else:
-                    black_pieces.append(f"{final_shape[1]}{board_positions[i]}")
+            # Print the final shape and detected color
+            print(f"Square {board_positions[i]}: Final Piece: {final_piece}, Detected color: {suggested_color}")
+
+            # Add the piece to the respective color's list
+            if final_piece[0] == 'w':
+                print(f'white piece: {final_piece[1]}{board_positions[i]}')
+                white_pieces.append(f"{final_piece[1]}{board_positions[i]}")
             else:
-                print(f"Square {board_positions[i]}: Final Shape: empty")
+                print(f'black piece: {final_piece[1]}{board_positions[i]}')
+                black_pieces.append(f"{final_piece[1]}{board_positions[i]}")
 
     return white_pieces, black_pieces
 
-# Save the detected pieces in human-readable format
+# Save the detected pieces in human-readable format with proper ordering
 def save_detected_positions(method="SSIM", threshold=0.5):
     white_pieces, black_pieces = detect_pieces(method=method, threshold=threshold)
+    
+    # Reorder pieces according to the specified format (pawns first, then king, queen, rook, bishop, knights)
+    def reorder_pieces(pieces):
+        order = ['P', 'K', 'Q', 'R', 'B', 'N']
+        ordered_pieces = []
+        for p in order:
+            ordered_pieces.extend([piece for piece in pieces if piece[0] == p])
+        return ordered_pieces
+    
+    white_pieces = reorder_pieces(white_pieces)
+    black_pieces = reorder_pieces(black_pieces)
+    
+    # Detect perspective again for the move indication
+    perspective = detect_perspective()
+    move_text = "White to move" if perspective == 'white' else "Black to move"
     
     with open('piece_positions.txt', 'w') as f:
         f.write(f"White: {', '.join(white_pieces)}\n")
         f.write(f"Black: {', '.join(black_pieces)}\n")
+        f.write(f"{move_text}\n")
+        
     print(f"Positions saved in piece_positions.txt")
