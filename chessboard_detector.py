@@ -19,6 +19,7 @@ def detect_chessboard():
     window.activate()
     time.sleep(0.005)  # Slight delay to ensure the window is active
     screenshot = pyautogui.screenshot(region=(window.left, window.top, window.width, window.height))
+    window.minimize()
 
     # Create the 'screenshots' directory if it doesn't exist
     os.makedirs('screenshots', exist_ok=True)
