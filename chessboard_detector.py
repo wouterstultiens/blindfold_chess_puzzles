@@ -14,9 +14,13 @@ def detect_chessboard():
     window = windows[0]
 
     # Step 2: Get the window's coordinates and take a screenshot of the window
-    window.activate()  # Bring the window to the front
-    time.sleep(1)  # Small delay to allow the window to focus
+    # Activate window and take a screenshot
+    window.activate()
+    time.sleep(0.005)
     screenshot = pyautogui.screenshot(region=(window.left, window.top, window.width, window.height))
+
+    # Minimize the window after taking the screenshot
+    window.minimize()
 
     # Create the 'screenshots' directory if it doesn't exist
     if not os.path.exists('screenshots'):
