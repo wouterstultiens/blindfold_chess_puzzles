@@ -1,6 +1,9 @@
+import os
 import cv2
 import numpy as np
-import os
+import csv
+from datetime import datetime
+import tkinter as tk
 from skimage.metrics import structural_similarity as ssim
 
 # Paths to the folders containing square images and pieces
@@ -24,20 +27,23 @@ board_positions_white = [
 
 board_positions_black = board_positions_white[::-1]
 
+# Ensure CSV headers
+def initialize_csv():
+    if not os.path.exists('puzzle_results.csv'):
+        with open('puzzle_results.csv', 'w', newline='') as file:
+            writer = csv.writer(file)
+            writer.writerow(['ID', 'Date', 'Puzzle Text', 'Number of Pieces', 'Rating Range', 'Result'])
+
+# Function to compare two images using SSIM
 def compare_images(imageA, imageB):
-    """
-    Compares two images using SSIM and returns a similarity score.
-    """
     imageB_resized = cv2.resize(imageB, (imageA.shape[1], imageA.shape[0]))
     grayA = cv2.cvtColor(imageA, cv2.COLOR_BGR2GRAY)
     grayB = cv2.cvtColor(imageB_resized, cv2.COLOR_BGR2GRAY)
     score, _ = ssim(grayA, grayB, full=True)
     return score
 
+# Function to detect predominant color (black/white)
 def detect_color(image, threshold=1):
-    """
-    Detects the predominant color (black or white) in an image based on pixel intensity.
-    """
     rgb_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
     total_pixels = rgb_image.shape[0] * rgb_image.shape[1]
     black_pixels = np.sum(np.all(rgb_image < 50, axis=2))
@@ -50,10 +56,8 @@ def detect_color(image, threshold=1):
     else:
         return 'black'
 
+# Function to detect perspective
 def detect_perspective():
-    """
-    Detects the board perspective by comparing the 'a1' square with reference images.
-    """
     a1_template = cv2.imread('pieces/notation_a1_square.png')
     h8_template = cv2.imread('pieces/notation_h8_square.png')
     a1_square = cv2.imread(os.path.join(squares_folder, 'a1.png'))
@@ -61,10 +65,8 @@ def detect_perspective():
     similarity_h8 = compare_images(a1_square, h8_template)
     return 'white' if similarity_a1 > similarity_h8 else 'black'
 
+# Function to detect pieces and return detected pieces and their positions
 def detect_pieces(method="SSIM", threshold=0.5):
-    """
-    Detects pieces on the board and returns lists of white and black pieces.
-    """
     perspective = detect_perspective()
     board_positions = board_positions_white if perspective == 'white' else board_positions_black
     white_pieces = []
@@ -75,7 +77,6 @@ def detect_pieces(method="SSIM", threshold=0.5):
             square_path = os.path.join(squares_folder, square_file)
             square_img = cv2.imread(square_path)
 
-            # Compare with all piece images to find the best match
             best_score = -1
             best_piece = 'empty'
             for piece in pieces:
@@ -88,11 +89,9 @@ def detect_pieces(method="SSIM", threshold=0.5):
             if best_piece == 'empty':
                 continue
 
-            # Detect the color of the piece
             detected_color = detect_color(square_img, threshold=threshold)
             final_piece = detected_color[0] + best_piece[1]
 
-            # Add to the respective list
             position = board_positions[i]
             if final_piece.startswith('w'):
                 white_pieces.append(f"{final_piece[1]}{position}")
@@ -101,15 +100,52 @@ def detect_pieces(method="SSIM", threshold=0.5):
 
     return white_pieces, black_pieces
 
-def save_detected_positions(method="SSIM", threshold=0.5):
-    """
-    Saves the detected piece positions to 'piece_positions.txt'.
-    """
+# Function to log puzzle metadata and results into a CSV file
+def log_puzzle_result(puzzle_id, puzzle_text, num_pieces, rating_range, result):
+    # Replace any line breaks with " - " in the puzzle_text
+    puzzle_text = puzzle_text.replace("\n", " - ")
+    
+    with open('puzzle_results.csv', 'a', newline='') as file:
+        writer = csv.writer(file)
+        writer.writerow([puzzle_id, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), puzzle_text, num_pieces, rating_range, result])
+
+# Function to handle GUI interactions and result submission
+def submit_result(result, puzzle_text, num_pieces, rating_range, window):
+    puzzle_id = datetime.now().strftime("%Y%m%d%H%M%S")
+    log_puzzle_result(puzzle_id, puzzle_text, num_pieces, rating_range, result)
+    window.destroy()
+
+# GUI for displaying puzzle and recording results
+def display_puzzle_gui(puzzle_text, num_pieces, rating_range):
+    window = tk.Tk()
+    window.title("Chess Puzzle")
+
+    # Set window size and center it on the screen
+    window.geometry('500x300')
+    window.eval('tk::PlaceWindow . center')
+
+    label = tk.Label(window, text=f"Puzzle:\n{puzzle_text}", font=("Arial", 14), wraplength=450)
+    label.pack(pady=20)
+
+    btn_frame = tk.Frame(window)
+    btn_frame.pack(pady=20)
+
+    # Create buttons with larger size and pastel colors
+    tk.Button(btn_frame, text="Right", width=12, height=2, bg="#77dd77", command=lambda: submit_result("right", puzzle_text, num_pieces, rating_range, window)).pack(side="left", padx=10)
+    tk.Button(btn_frame, text="Wrong", width=12, height=2, bg="#ff6961", command=lambda: submit_result("wrong", puzzle_text, num_pieces, rating_range, window)).pack(side="left", padx=10)
+    tk.Button(btn_frame, text="N/A", width=12, height=2, bg="#cfcfc4", command=lambda: submit_result("N/A", puzzle_text, num_pieces, rating_range, window)).pack(side="left", padx=10)
+
+    # Ensure the window is brought to the front and focused
+    window.attributes('-topmost', True)
+    window.mainloop()
+
+# Main function to detect and display the puzzle in a window
+def print_detected_positions(method="SSIM", threshold=0.5):
+    initialize_csv()
     white_pieces, black_pieces = detect_pieces(method=method, threshold=threshold)
 
-    # Reorder pieces: pawns first, then K, Q, R, B, N
     def reorder_pieces(pieces_list):
-        order = ['P', 'K', 'Q', 'R', 'B', 'N']
+        order = ['K', 'P', 'Q', 'R', 'B', 'N']
         return [piece for piece_type in order for piece in pieces_list if piece.startswith(piece_type)]
 
     white_pieces_ordered = reorder_pieces(white_pieces)
@@ -118,7 +154,13 @@ def save_detected_positions(method="SSIM", threshold=0.5):
     perspective = detect_perspective()
     move_text = "White to move" if perspective == 'white' else "Black to move"
 
-    with open('piece_positions.txt', 'w') as f:
-        f.write(f"White: {', '.join(white_pieces_ordered)}\n")
-        f.write(f"Black: {', '.join(black_pieces_ordered)}\n")
-        f.write(f"{move_text}\n")
+    puzzle_text = f"{move_text}\nWhite: {', '.join(white_pieces_ordered)}\nBlack: {', '.join(black_pieces_ordered)}"
+    num_pieces = "3-5"
+    rating_range = "0-1000"
+
+    # Display the puzzle and options in a graphical window
+    display_puzzle_gui(puzzle_text, num_pieces, rating_range)
+
+# Example of usage
+if __name__ == "__main__":
+    print_detected_positions(method="SSIM", threshold=0.5)
