@@ -15,9 +15,14 @@ def detect_chessboard():
         raise Exception("No window found with 'Chess tactics' in the title.")
     window = windows[0]
 
-    # Activate the window and take a screenshot
+    # Restore the window if minimized, or activate it if it's not the active window
+    if window.isMinimized:
+        window.restore()
     window.activate()
-    time.sleep(0.01)  # Slight delay to ensure the window is active
+
+    time.sleep(0.1)  # Slight delay to ensure the window is active and restored
+
+    # Take a screenshot of the chessboard
     screenshot = pyautogui.screenshot(region=(window.left, window.top, window.width, window.height))
     window.minimize()
 

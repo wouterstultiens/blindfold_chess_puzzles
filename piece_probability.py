@@ -102,12 +102,14 @@ def detect_pieces(method="SSIM", threshold=0.5):
 
 # Function to log puzzle metadata and results into a CSV file
 def log_puzzle_result(puzzle_id, puzzle_text, num_pieces, rating_range, result):
-    # Replace any line breaks with " - " in the puzzle_text
-    puzzle_text = puzzle_text.replace("\n", " - ")
     
-    with open('puzzle_results.csv', 'a', newline='') as file:
-        writer = csv.writer(file)
-        writer.writerow([puzzle_id, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), puzzle_text, num_pieces, rating_range, result])
+    if result != 'N/A':
+        # Replace any line breaks with " - " in the puzzle_text
+        puzzle_text = puzzle_text.replace("\n", " - ")
+        
+        with open('puzzle_results.csv', 'a', newline='') as file:
+            writer = csv.writer(file)
+            writer.writerow([puzzle_id, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), puzzle_text, num_pieces, rating_range, result])
 
 # Function to handle GUI interactions and result submission
 def submit_result(result, puzzle_text, num_pieces, rating_range, window):
@@ -120,9 +122,16 @@ def display_puzzle_gui(puzzle_text, num_pieces, rating_range):
     window = tk.Tk()
     window.title("Chess Puzzle")
 
-    # Set window size and center it on the screen
-    window.geometry('500x300')
-    window.eval('tk::PlaceWindow . center')
+    # Set window size
+    window_width = 500
+    window_height = 300
+
+    # Calculate x and y coordinates for the top-right corner
+    x = 1350
+    y = 50  # Top of the screen
+
+    # Set the geometry of the window to top-right
+    window.geometry(f'{window_width}x{window_height}+{x}+{y}')
 
     label = tk.Label(window, text=f"Puzzle:\n{puzzle_text}", font=("Arial", 14), wraplength=450)
     label.pack(pady=20)
